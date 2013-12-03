@@ -49,6 +49,14 @@ Standard Python document strings are inside the module::
 
 (but it's just `dict` with a commit, really).
 
+**Beware**: because of Python semantics, `sqlitedict` cannot know when a mutable persistent-dictionary entry was modified.
+For example, `mydict.setdefault('new_key', []).append(1)` will leave `mydict['new_key']` equal to empty list, not `[1]`.
+You'll need to explicitly assign the mutated object back to achieve the same effect::
+
+>>> val = mydict.get('new_key', [])
+>>> val.append(1)
+>>> mydict['new_key'] = val
+
 Comments, bug reports
 ---------------------
 
