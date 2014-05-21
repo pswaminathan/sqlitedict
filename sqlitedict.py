@@ -26,16 +26,24 @@ don't forget to call `mydict.commit()` when done with a transaction.
 """
 
 
+from __future__ import print_function
 import sqlite3
 import os
 import tempfile
 import random
 import logging
-from cPickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
-from UserDict import DictMixin
-from Queue import Queue
+from sys import version_info
 from threading import Thread
+try:
+    from cPickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
+    from UserDict import DictMixin
+    from Queue import Queue
+except ImportError: # Python 3
+    from pickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
+    from collections import MutableMapping as DictMixin
+    from queue import Queue
 
+PY3 = version_info.major > 2
 
 logger = logging.getLogger('sqlitedict')
 
@@ -56,7 +64,7 @@ def decode(obj):
     return loads(str(obj))
 
 
-class SqliteDict(object, DictMixin):
+class SqliteDict(DictMixin):
     def __init__(self, filename=None, tablename='unnamed', flag='c',
                  autocommit=False, journal_mode="DELETE"):
         """
@@ -120,7 +128,10 @@ class SqliteDict(object, DictMixin):
 
     def __bool__(self):
         GET_LEN = 'SELECT MAX(ROWID) FROM %s' % self.tablename
-        return self.conn.select_one(GET_LEN) is not None
+        # return self.conn.select_one(GET_LEN) is not None
+        num = self.conn.select_one(GET_LEN)
+        print(num)
+        return num is not None
 
     def iterkeys(self):
         GET_KEYS = 'SELECT key FROM %s ORDER BY rowid' % self.tablename
@@ -171,12 +182,18 @@ class SqliteDict(object, DictMixin):
             self.update(kwds)
 
     def keys(self):
+        if PY3:
+            return self.iterkeys()
         return list(self.iterkeys())
 
     def values(self):
+        if PY3:
+            return self.itervalues()
         return list(self.itervalues())
 
     def items(self):
+        if PY3:
+            return self.iteritems()
         return list(self.iteritems())
 
     def __iter__(self):
@@ -212,7 +229,7 @@ class SqliteDict(object, DictMixin):
         logger.info("deleting %s" % self.filename)
         try:
             os.remove(self.filename)
-        except IOError, e:
+        except IOError as e:
             logger.warning("failed to delete %s: %s" % (self.filename, e))
 
     def __del__(self):
@@ -297,6 +314,7 @@ class SqliteMultithread(Thread):
         self.execute(req, arg, res)
         while True:
             rec = res.get()
+            print(rec)
             if rec == '--no more--':
                 break
             yield rec
@@ -304,7 +322,7 @@ class SqliteMultithread(Thread):
     def select_one(self, req, arg=None):
         """Return only the first row of the SELECT, or None if there are no matching rows."""
         try:
-            return iter(self.select(req, arg)).next()
+            return next(self.select(req, arg))
         except StopIteration:
             return None
 
@@ -320,9 +338,12 @@ class SqliteMultithread(Thread):
 if __name__ in '__main___':
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(module)s:%(lineno)d : %(funcName)s(%(threadName)s) : %(message)s')
     logging.root.setLevel(level=logging.INFO)
-    for d in SqliteDict(), SqliteDict('example', flag='n'):
+    for d in [SqliteDict(), SqliteDict('example', flag='n')]:
+        print('asserting list(d) is empty')
         assert list(d) == []
+        print('asserting len(d) == 0')
         assert len(d) == 0
+        print('asserting bool(d) is False')
         assert not d
         d['abc'] = 'rsvp' * 100
         assert d['abc'] == 'rsvp' * 100
@@ -367,4 +388,4 @@ if __name__ in '__main___':
         d.clear()
         assert not d
         d.close()
-    print 'all tests passed :-)'
+    print('all tests passed :-)')
