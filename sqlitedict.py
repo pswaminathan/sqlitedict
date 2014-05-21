@@ -32,7 +32,7 @@ import os
 import tempfile
 import random
 import logging
-from sys import version_info
+import sys
 from threading import Thread
 try:
     from cPickle import dumps, loads, HIGHEST_PROTOCOL as PICKLE_PROTOCOL
@@ -43,10 +43,19 @@ except ImportError: # Python 3
     from collections import MutableMapping as DictMixin
     from queue import Queue
 
-PY3 = version_info.major > 2
-
+PY3 = sys.version_info.major > 2
 logger = logging.getLogger('sqlitedict')
 
+
+if not PY3 and sys.version_info.minor < 6:
+    _sentinel = object()
+    def next(it, default=_sentinel):
+        try:
+            return it.next()
+        except StopIteration:
+            if default is _sentinel:
+                raise
+            return default
 
 
 def open(*args, **kwargs):
@@ -229,7 +238,8 @@ class SqliteDict(DictMixin):
         logger.info("deleting %s" % self.filename)
         try:
             os.remove(self.filename)
-        except IOError as e:
+        except IOError:
+            _, e, _ = sys.exc_info()
             logger.warning("failed to delete %s: %s" % (self.filename, e))
 
     def __del__(self):
